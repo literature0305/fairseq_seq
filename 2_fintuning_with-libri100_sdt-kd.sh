@@ -1,5 +1,5 @@
 #!/bin/bash
-stage=6
+stage=5
 stop_stage=100
 
 dir_trainset=data/train-clean-100
