@@ -17,6 +17,7 @@ with open(dir_wrd, 'r') as f:
 with open(dir_tsv, 'r') as f:
     lines_tsv = f.readlines()
 
+# this threshold setting (3,850) removes 5 samples in 960h.
 threshold_min=3
 threshold_max=850
 
