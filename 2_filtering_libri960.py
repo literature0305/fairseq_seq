@@ -17,8 +17,8 @@ with open(dir_wrd, 'r') as f:
 with open(dir_tsv, 'r') as f:
     lines_tsv = f.readlines()
 
-threshold_min=10
-threshold_max=800
+threshold_min=3
+threshold_max=850
 
 new_lines_ltr=[]
 new_lines_wrd=[]
