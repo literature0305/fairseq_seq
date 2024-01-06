@@ -12,6 +12,7 @@
 7. ./3_decode_viterbi.sh (경로 설정 해주기)
 8. Baseline 실험: ./2_fintuning_with-libri100.sh
 9. 실험 결과
+
 | name     	| SDT loss                         	| test_clean 	| dev_clean 	| test_other 	| dev_other 	|
 
 |----------	|----------------------------------	|------------	|-----------	|------------	|-----------	|
