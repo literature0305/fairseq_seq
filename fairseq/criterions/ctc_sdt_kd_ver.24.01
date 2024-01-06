@@ -20,6 +20,7 @@ from fairseq.tasks import FairseqTask
 from fairseq.logging.meters import safe_round
 import random
 import editdistance
+from aligner_pytorch import mas
 
 torch.set_printoptions(threshold=999999)
 
@@ -238,7 +239,7 @@ class CtcCriterionSdtKD(FairseqCriterion):
             txt_auged.append(txt_rand_del)
 
             # random insertion (dynamic size)
-            max_len_ins=60
+            max_len_ins=4
             txt_rand_ins = torch.ones(txt.size(0), txt.size(1) + max_len_ins).to(txt.device).to(txt.dtype)
             for idx, line in enumerate(txt):
                 line_len=target_length[idx]
@@ -262,6 +263,7 @@ class CtcCriterionSdtKD(FairseqCriterion):
 
     def forward(self, model, sample, reduce=True, **kwargs):
         net_output = model(**sample["net_input"], target=sample["target"])
+        # raise ValueError('net otutput:', net_output)
         lprobs = model.get_normalized_probs(
             net_output, log_probs=True
         ).contiguous()  # (T, B, C) from the encoder
@@ -332,19 +334,8 @@ class CtcCriterionSdtKD(FairseqCriterion):
 
             # output
             # sequence discriminative training loss
-            
-            # TODO 1: ablation study (remove aug)
-            # TODO 2: ablation study (remove LM / change LM to ROBERTA)
-            # TODO 3: ablation study (add LM perturbation)
-            # TODO 4: ablation study (add N-best hyp)
-            # TODO 5: find new similarity measure
-            # TODO 6: how can we handle silence frames?
-            # TODO 7: hyper parameter tuning
-            # TODO 8: 960H training
-            # TODO 9: try another layers output (or multi layers)
-            # TODO 10: batch inference for LM
-            # TODO 11: stochastic perturbation (# augmentation > 1)
-            # TODO 12: sim(a,b) = 1.0 – dist(a,b)/max(|a|,|b|)
+
+            squeeze = -1# 2
 
             # target mask
             target_mask = (sample["target"] != self.target_dictionary.pad())
@@ -352,6 +343,15 @@ class CtcCriterionSdtKD(FairseqCriterion):
                 encoder_out_kd_mask = (net_output["padding_mask"] == False).unsqueeze(-1)
                 encoder_out_kd_mask2 = (net_output["padding_mask"] == False)
                 encoder_masking = True
+                if squeeze > 1:
+                    # print('encoder_out_kd_mask:', encoder_out_kd_mask.size()) # B,T
+                    # print('encoder_out_kd_mask2:', encoder_out_kd_mask2.size())
+                    encoder_out_kd_mask = encoder_out_kd_mask[:, ::squeeze]
+                    encoder_out_kd_mask2 = encoder_out_kd_mask2[:, ::squeeze]
+                    # x before: torch.Size([778, 8, 768])
+                    # x after: torch.Size([389, 8, 768])
+                    # encoder_out_kd_mask: torch.Size([8, 778, 1])
+                    # encoder_out_kd_mask2: torch.Size([8, 778])
             else:
                 encoder_out_kd_mask = 1
                 encoder_out_kd_mask2 = 1
@@ -382,7 +382,7 @@ class CtcCriterionSdtKD(FairseqCriterion):
                 str_line = self.target_dictionary.string(sample["target"][idx_batch]).replace(' <pad>','')
                 str_ref.append(str_line)
 
-            max_projection_axis='speech' # 'text'
+            max_projection_axis='mas' # 'speech' # 'text'
 
             # score matrix for noise target (B x T')
             for idx in range(len(noisy_target)):
@@ -412,10 +412,36 @@ class CtcCriterionSdtKD(FairseqCriterion):
                     else:
                         # average
                         score_mat_negative = ((score_mat_negative).sum(1) / score_mat_negative.size(-1))  # B
-                else:
+                elif max_projection_axis == 'text':
                     # max & average (max_projection_axis == 'text')
                     score_mat_negative = score_mat_negative.max(-1).values # B x T
                     score_mat_negative = (score_mat_negative*target_mask_tmp).sum(1) / target_mask_tmp.sum(-1) # B
+                elif max_projection_axis == 'mas':
+                    if print_option:
+                        score_mat_negative2 = score_mat_negative.transpose(1,2).max(-1).values # B x T'
+                        if encoder_masking:
+                            # average
+                            score_mat_negative2 = ((score_mat_negative2 * encoder_out_kd_mask2).sum(1) / encoder_out_kd_mask2.sum(-1)) # B
+                        else:
+                            # average
+                            score_mat_negative2 = ((score_mat_negative2).sum(1) / score_mat_negative2.size(-1))  # B
+                        score_mat_negative2_position1 = score_mat_negative.transpose(1,2).max(-1).indices # B x T'
+                        score_mat_negative2_position2 = score_mat_negative.max(-1).indices # B x T'
+                    masks = mas(score_mat_negative) # B x T' x T
+
+                    # target_mask_tmp # B x T
+                    # print('target_mask_tmp:', target_mask_tmp.size()) # target_mask_tmp: torch.Size([8, 248])
+                    # raise ValueError('score_mat_negative:', score_mat_negative.size()) # torch.Size([8, 248, 778])
+                    score_mat_negative = (score_mat_negative * masks).sum(-1)
+                    score_mat_negative = (score_mat_negative * target_mask_tmp).mean(-1)
+
+                    if print_option:
+                        print('score_mat_neg mas:', score_mat_negative)
+                        print('score_mat_neg max:', score_mat_negative2.sum(-1))
+                        print('mask 1, mas text:', torch.argmax(masks[0], dim=-1))
+                        print('mask 2, max text:', score_mat_negative2_position2[0])
+                        print('mask 1, mas speech:', torch.argmax(masks[0].transpose(0,1), dim=-1))
+                        print('mask 2, max speech:', score_mat_negative2_position1[0])
                 if idx == 0:
                     score_mat = score_mat_negative.unsqueeze(-1) # B,#aug
                 else:
@@ -430,7 +456,6 @@ class CtcCriterionSdtKD(FairseqCriterion):
                             levenshtein[idx_batch][idx] = editdistance.eval(str_ref[idx_batch], str_denom) / len_str
                         else:
                             levenshtein[idx_batch][idx] = editdistance.eval(str_ref[idx_batch], str_denom)
-
 
             # score matrix for samples in batch
             # for i in range(0, net_output["target_embed"].size(1) - 1):
@@ -468,9 +493,8 @@ class CtcCriterionSdtKD(FairseqCriterion):
                             levenshtein[j][len(noisy_target) + i] = editdistance.eval(str_ref[j], str_denom)
 
             if use_length_norm_for_editdistance:
-                levenshtein = 1 - levenshtein
-                levenshtein_sum = levenshtein.sum(-1) # # B x B+#aug
-                levenshtein = levenshtein / levenshtein_sum.unsqueeze(-1) # B x B+#aug
+                temperature_lev = 39.0
+                levenshtein = torch.softmax(-levenshtein * (1+temperature_lev), dim=-1)
             else:
                 levenshtein_max = levenshtein.max(-1).values.unsqueeze(-1) # # B x B+#aug
                 levenshtein = levenshtein_max - levenshtein
@@ -492,7 +516,7 @@ class CtcCriterionSdtKD(FairseqCriterion):
             # summation
             normalized_score = self.criterion_kl(torch.log_softmax(score_mat, dim=-1), levenshtein).sum()
             if print_option:
-                print('normalized_score', normalized_score, 'loss', loss, 'alpha_kd', alpha_kd)
+                print('normalized_score:', normalized_score, 'loss', loss, 'alpha_kd', alpha_kd)
 
             loss = loss + alpha_kd * normalized_score 
 
