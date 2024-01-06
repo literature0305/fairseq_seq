@@ -12,12 +12,8 @@
 7. ./3_decode_viterbi.sh (경로 설정 해주기)
 8. Baseline 실험: ./2_fintuning_with-libri100.sh
 9. 실험 결과
-| name     | SDT loss                         | test_clean | dev_clean | test_other | dev_other |
-
-|----------|----------------------------------|------------|-----------|------------|-----------|
-
-| Baseline | x                                | 6.13       | 6.06      | 12.95      | 13.43     |
-
-| SDT-1    | Projection: speech axis          | 5.56       | 5.54      | 12.87      | 13.39     |
-
-| SDT-2    | MAS (monotonic alignment search) | 5.48       | 5.57      | 12.62      | 13.29     |
+| name     	| SDT loss                         	| test_clean 	| dev_clean 	| test_other 	| dev_other 	|
+|----------	|----------------------------------	|------------	|-----------	|------------	|-----------	|
+| Baseline 	| x                                	| 6.13       	| 6.06      	| 12.95      	| 13.43     	|
+| SDT-1    	| Projection: speech axis          	| 5.56       	| 5.54      	| 12.87      	| 13.39     	|
+| SDT-2    	| MAS (monotonic alignment search) 	| 5.48       	| 5.57      	| 12.62      	| 13.29     	|
