@@ -2,12 +2,10 @@
 
 1. Download pretrained Language Model (LM) from Google Drive
    **Link**: [https://drive.google.com/file/d/1FaZnwLX2rWSMq1D5LfdVmdXvVQNMXylJ/view?usp=sharing](https://drive.google.com/file/d/1FaZnwLX2rWSMq1D5LfdVmdXvVQNMXylJ/view?usp=sharing)
+   
    **LM Configuration**
-   
        - Model: FairSeq-RoBERTa
-   
        - Tokenization: letter (shares the same vocabulary as the default setting for wav2vec2.0 fine-tuning)
-   
        - Training Dataset: Libri Corpus
 3. Unzip with `tar -xvf pretrained_libri-letter-bert.tar.gz`
 4. Clone the repository: `git clone https://github.com/literature0305/fairseq_seq.git`
